@@ -3,6 +3,7 @@ import './App.css'
 import { useAuth } from './lib/auth'
 import { deleteNote, fetchNotesInBounds } from './lib/notesApi'
 import { useGeolocation } from './lib/useGeolocation'
+import type { Session } from '@supabase/supabase-js'
 import type { GeocodeResult, MapBounds, Note } from './lib/types'
 import MapView, { type FlyTarget } from './components/MapView'
 import SearchBar from './components/SearchBar'
@@ -35,6 +36,7 @@ export default function App() {
   const boundsRef = useRef<MapBounds | null>(null)
   const fetchTimer = useRef<number | undefined>(undefined)
   const initialCentered = useRef(false)
+  const prevSessionRef = useRef<Session | null>(session)
 
   // Center the map on the user's location once, when the first fix arrives.
   // Skipped if the map has already been sent somewhere (e.g. a search).
@@ -51,6 +53,27 @@ export default function App() {
       .then(setNotes)
       .catch((err) => console.error('Failed to load notes:', err))
   }, [])
+
+  // When the user logs out, clear auth-dependent UI and reload public notes.
+  useEffect(() => {
+    const wasLoggedIn = !!prevSessionRef.current
+    const isLoggedIn = !!session
+    prevSessionRef.current = session
+
+    if (!wasLoggedIn || isLoggedIn) return
+
+    setSelected(null)
+    setEditor(null)
+    setShowMyNotes(false)
+    setShowMyGroups(false)
+    setShowAuth(false)
+    setPicking(false)
+    setFollowing(false)
+    setToast(null)
+    setNotes([])
+    setRefreshKey((k) => k + 1)
+    reloadNotes()
+  }, [session, reloadNotes])
 
   const handleBoundsChange = useCallback(
     (bounds: MapBounds) => {
