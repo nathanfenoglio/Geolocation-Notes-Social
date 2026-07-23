@@ -1,0 +1,62 @@
+# Geo Notes
+
+A responsive web app for leaving notes — text, images, video, audio — pinned to locations on a world map. Notes can be private, shared with specific users by username, or public for everyone.
+
+Built with React + Vite + TypeScript, [Leaflet](https://leafletjs.com/) with OpenStreetMap tiles, and [Supabase](https://supabase.com/) (Postgres, Auth, Storage). Location search is powered by [Nominatim](https://nominatim.org/).
+
+## Features
+
+- Full-screen world map with pinch-zoom, marker clustering, and colored pins by visibility (green = public, orange = shared, gray = private)
+- Location search with fly-to navigation
+- Add a note by tapping the map, searching, or using your current GPS location
+- Each note stores both the date it was posted and a user-selected "date this note is about" (e.g. a photo of a house from a previous year)
+- Attach images, video, and audio (up to 50 MB per file), stored privately and served via signed URLs
+- Accounts with public usernames; share notes with specific users by username
+- Anonymous visitors can browse all public notes; an account is needed to create notes or see private/shared ones
+- Responsive layout: side panel on desktop, bottom sheet on mobile
+
+## Setup
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure Supabase
+
+Copy `.env.example` to `.env` and fill in your Supabase project URL and anon key (Dashboard → Project Settings → API):
+
+```
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+### 3. Apply the database schema
+
+Open the Supabase Dashboard → SQL Editor → New query, paste the entire contents of [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql), and run it. This creates:
+
+- `profiles`, `notes`, `note_shares`, `note_media` tables with Row Level Security
+- A trigger that creates a profile (with username) on signup
+- The private `note-media` storage bucket with access policies
+
+### 4. (Recommended for local testing) Disable email confirmation
+
+Dashboard → Authentication → Sign In / Up → Email → turn off "Confirm email". Otherwise new users must click a confirmation link before logging in.
+
+### 5. Run
+
+```bash
+npm run dev
+```
+
+## Notes on external services
+
+- Map tiles are served by openstreetmap.org and search by nominatim.openstreetmap.org, both free with attribution (already included in the map's attribution control). Nominatim allows at most 1 request/second — the search box debounces and rate-limits accordingly.
+- Supabase free tier: 500 MB database, 1 GB file storage, 50 MB per-file upload limit (enforced client-side and on the bucket).
+
+## Scripts
+
+- `npm run dev` — start the dev server
+- `npm run build` — typecheck and build for production (`dist/`)
+- `npm run preview` — serve the production build locally
