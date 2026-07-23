@@ -11,7 +11,8 @@ Built with React + Vite + TypeScript, [Leaflet](https://leafletjs.com/) with Ope
 - Add a note by tapping the map, searching, or using your current GPS location
 - Each note stores both the date it was posted and a user-selected "date this note is about" (e.g. a photo of a house from a previous year)
 - Attach images, video, and audio (up to 50 MB per file), stored privately and served via signed URLs
-- Accounts with public usernames; share notes with specific users by username
+- Accounts with public usernames; share notes with specific users by username or with named groups
+- My Groups panel to create and edit groups you own; group membership is live-linked to note access
 - Anonymous visitors can browse all public notes; an account is needed to create notes or see private/shared ones
 - Responsive layout: side panel on desktop, bottom sheet on mobile
 
@@ -34,11 +35,13 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ### 3. Apply the database schema
 
-Open the Supabase Dashboard → SQL Editor → New query, paste the entire contents of [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql), and run it. This creates:
+Open the Supabase Dashboard → SQL Editor → New query. For each file below, paste the **entire** contents, click in the editor **without selecting any text** (selected text makes the editor run only the selection), and click Run:
 
-- `profiles`, `notes`, `note_shares`, `note_media` tables with Row Level Security
-- A trigger that creates a profile (with username) on signup
-- The private `note-media` storage bucket with access policies
+1. [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql) — `profiles`, `notes`, `note_shares`, `note_media`, auth trigger, storage bucket
+2. [`supabase/migrations/002_groups.sql`](supabase/migrations/002_groups.sql) — user groups, group membership, group note shares, and RLS policies
+3. [`supabase/migrations/003_fix_user_groups_select.sql`](supabase/migrations/003_fix_user_groups_select.sql) — fixes group create when the app returns the new row (INSERT RETURNING)
+
+If group policies were never applied, also run [`supabase/migrations/002b_groups_policies_repair.sql`](supabase/migrations/002b_groups_policies_repair.sql) before step 3.
 
 ### 4. (Recommended for local testing) Disable email confirmation
 

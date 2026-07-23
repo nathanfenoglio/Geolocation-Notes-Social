@@ -10,6 +10,7 @@ import AuthModal from './components/AuthModal'
 import NoteDetail from './components/NoteDetail'
 import NoteEditor from './components/NoteEditor'
 import MyNotes from './components/MyNotes'
+import MyGroups from './components/MyGroups'
 
 interface EditorState {
   note: Note | null
@@ -24,6 +25,7 @@ export default function App() {
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [showAuth, setShowAuth] = useState(false)
   const [showMyNotes, setShowMyNotes] = useState(false)
+  const [showMyGroups, setShowMyGroups] = useState(false)
   const [picking, setPicking] = useState(false)
   const [flyTo, setFlyTo] = useState<FlyTarget | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -69,6 +71,7 @@ export default function App() {
     setPicking(false)
     setSelected(null)
     setShowMyNotes(false)
+    setShowMyGroups(false)
     setEditor({ note: null, lat, lng })
   }
 
@@ -162,7 +165,7 @@ export default function App() {
     setFlyTo({ lat: note.lat, lng: note.lng, zoom: 15 })
   }
 
-  const panelOpen = selected !== null || editor !== null || showMyNotes
+  const panelOpen = selected !== null || editor !== null || showMyNotes || showMyGroups
 
   return (
     <div className="app-shell">
@@ -180,7 +183,22 @@ export default function App() {
           </button>
           {session ? (
             <>
-              <button onClick={() => setShowMyNotes(true)}>My notes</button>
+              <button
+                onClick={() => {
+                  setShowMyGroups(false)
+                  setShowMyNotes(true)
+                }}
+              >
+                My notes
+              </button>
+              <button
+                onClick={() => {
+                  setShowMyNotes(false)
+                  setShowMyGroups(true)
+                }}
+              >
+                My Groups
+              </button>
               <button onClick={() => void signOut()} title={profile?.username}>
                 Log out{profile ? ` (${profile.username})` : ''}
               </button>
@@ -211,6 +229,7 @@ export default function App() {
           onMarkerClick={(note) => {
             setEditor(null)
             setShowMyNotes(false)
+            setShowMyGroups(false)
             setSelected(note)
           }}
           onLocateClick={handleLocateClick}
@@ -245,6 +264,10 @@ export default function App() {
             onClose={() => setShowMyNotes(false)}
             refreshKey={refreshKey}
           />
+        )}
+
+        {showMyGroups && !selected && !editor && !showMyNotes && (
+          <MyGroups onClose={() => setShowMyGroups(false)} />
         )}
       </main>
 

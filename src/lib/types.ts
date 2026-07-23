@@ -31,6 +31,13 @@ export interface Note {
   note_media?: NoteMedia[]
 }
 
+export interface Group {
+  id: string
+  owner_id: string
+  name: string
+  member_count: number
+}
+
 export interface MapBounds {
   north: number
   south: number

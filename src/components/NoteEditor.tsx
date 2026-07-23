@@ -12,8 +12,16 @@ import {
   updateNote,
   uploadNoteMedia,
 } from '../lib/notesApi'
-import type { Note, NoteMedia, Visibility } from '../lib/types'
+import {
+  addGroupShare,
+  fetchMyGroups,
+  fetchNoteGroupShares,
+  removeGroupShare,
+  type NoteGroupShare,
+} from '../lib/groupsApi'
+import type { Group, Note, NoteMedia, Visibility } from '../lib/types'
 import MediaGallery from './MediaGallery'
+import GroupCreator from './GroupCreator'
 
 interface NoteEditorProps {
   /** Existing note when editing, null when creating */
@@ -47,6 +55,9 @@ export default function NoteEditor({ note, lat, lng, onSaved, onClose }: NoteEdi
   const [shares, setShares] = useState<ShareEntry[]>([])
   const [shareInput, setShareInput] = useState('')
   const [shareError, setShareError] = useState<string | null>(null)
+  const [groups, setGroups] = useState<Group[]>([])
+  const [groupShares, setGroupShares] = useState<NoteGroupShare[]>([])
+  const [showGroupCreator, setShowGroupCreator] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
@@ -56,8 +67,19 @@ export default function NoteEditor({ note, lat, lng, onSaved, onClose }: NoteEdi
       fetchShares(note.id)
         .then(setShares)
         .catch(() => {})
+      fetchNoteGroupShares(note.id)
+        .then(setGroupShares)
+        .catch((err) => console.error('Failed to load group shares:', err))
     }
   }, [note?.id])
+
+  // Load the user's groups when the shared option is in play
+  useEffect(() => {
+    if (visibility !== 'shared' || !session?.user) return
+    fetchMyGroups()
+      .then(setGroups)
+      .catch((err) => console.error('Failed to load groups:', err))
+  }, [visibility, session?.user?.id])
 
   function addFiles(list: FileList | null) {
     if (!list) return
@@ -103,6 +125,60 @@ export default function NoteEditor({ note, lat, lng, onSaved, onClose }: NoteEdi
     if (note) await removeShare(note.id, entry.id)
   }
 
+  async function handleSelectGroup(groupId: string) {
+    setShareError(null)
+    if (!groupId || groupShares.some((g) => g.group_id === groupId)) return
+    const group = groups.find((g) => g.id === groupId)
+    if (!group) return
+    const entry: NoteGroupShare = {
+      group_id: group.id,
+      name: group.name,
+      member_count: group.member_count,
+    }
+    setGroupShares((prev) => [...prev, entry])
+    if (note) {
+      try {
+        await addGroupShare(note.id, group.id)
+      } catch (err) {
+        console.error('Failed to share with group:', err)
+        setGroupShares((prev) => prev.filter((g) => g.group_id !== group.id))
+        setShareError('Could not share with that group.')
+      }
+    }
+  }
+
+  async function handleRemoveGroupShare(entry: NoteGroupShare) {
+    setGroupShares((prev) => prev.filter((g) => g.group_id !== entry.group_id))
+    if (note) await removeGroupShare(note.id, entry.group_id)
+  }
+
+  function handleGroupCreated(group: Group) {
+    setGroups((prev) =>
+      [...prev.filter((g) => g.id !== group.id), group].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+    )
+    void handleSelectGroupCreated(group)
+  }
+
+  async function handleSelectGroupCreated(group: Group) {
+    const entry: NoteGroupShare = {
+      group_id: group.id,
+      name: group.name,
+      member_count: group.member_count,
+    }
+    setGroupShares((prev) =>
+      prev.some((g) => g.group_id === group.id) ? prev : [...prev, entry],
+    )
+    if (note) {
+      try {
+        await addGroupShare(note.id, group.id)
+      } catch (err) {
+        console.error('Failed to share with new group:', err)
+      }
+    }
+  }
+
   async function handleDeleteMedia(item: NoteMedia) {
     if (!confirm('Delete this attachment?')) return
     await deleteNoteMedia(item.id, item.storage_path)
@@ -123,6 +199,9 @@ export default function NoteEditor({ note, lat, lng, onSaved, onClose }: NoteEdi
         saved = await createNote(session.user.id, input)
         for (const entry of shares) {
           await addShare(saved.id, entry.id)
+        }
+        for (const entry of groupShares) {
+          await addGroupShare(saved.id, entry.group_id)
         }
       }
       for (let i = 0; i < files.length; i++) {
@@ -219,9 +298,58 @@ export default function NoteEditor({ note, lat, lng, onSaved, onClose }: NoteEdi
                 Add
               </button>
             </div>
+            <div className="group-share-row">
+              <div className="group-share-select">
+                <label htmlFor="ne-group">Share with group</label>
+                <div className="share-row">
+                  <select
+                    id="ne-group"
+                    value=""
+                    onChange={(e) => void handleSelectGroup(e.target.value)}
+                  >
+                    <option value="">
+                      {groups.length === 0 ? 'No groups yet' : 'Select a group…'}
+                    </option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} ({g.member_count}{' '}
+                        {g.member_count === 1 ? 'member' : 'members'})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowGroupCreator((v) => !v)}
+                    title="Create a new group"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+            {showGroupCreator && (
+              <GroupCreator
+                onCreated={handleGroupCreated}
+                onClose={() => setShowGroupCreator(false)}
+              />
+            )}
             {shareError && <p className="form-error">{shareError}</p>}
-            {shares.length > 0 && (
+            {(shares.length > 0 || groupShares.length > 0) && (
               <ul className="share-list">
+                {groupShares.map((g) => (
+                  <li key={`group-${g.group_id}`} className="group-chip">
+                    {g.name} ({g.member_count}{' '}
+                    {g.member_count === 1 ? 'member' : 'members'})
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      onClick={() => void handleRemoveGroupShare(g)}
+                      aria-label={`Stop sharing with group ${g.name}`}
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
                 {shares.map((s) => (
                   <li key={s.id}>
                     {s.username}

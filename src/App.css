@@ -338,6 +338,82 @@
   font-size: 0.85rem;
 }
 
+.share-list li.group-chip {
+  border-color: var(--shared);
+  color: var(--shared);
+  font-weight: 600;
+}
+
+.group-share-row {
+  margin-top: 0.7rem;
+}
+
+/* ---------- Group creator / editor ---------- */
+
+.group-creator {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  margin-top: 0.6rem;
+}
+
+.group-creator-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ---------- My groups list ---------- */
+
+.my-groups-list {
+  list-style: none;
+  margin: 0 0 0.8rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.my-group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  text-align: left;
+  background: var(--surface-2);
+  padding: 0.6rem 0.7rem;
+}
+
+.my-group-row:hover {
+  background: var(--border);
+}
+
+.my-group-row.expanded {
+  outline: 1px solid var(--accent);
+}
+
+.my-group-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.my-group-count {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.new-group-btn {
+  width: 100%;
+}
+
 /* ---------- Media ---------- */
 
 .media-gallery {
