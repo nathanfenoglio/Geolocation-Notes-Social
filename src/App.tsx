@@ -197,7 +197,7 @@ export default function App() {
           <span className="brand-pin" aria-hidden="true">
             ◉
           </span>
-          Geo Notes
+          Geolocation Notes Social
         </div>
         <SearchBar onSelect={handleSearchSelect} />
         <div className="top-actions">
