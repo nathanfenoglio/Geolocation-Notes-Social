@@ -105,7 +105,28 @@ export default function App() {
     }
     setSelected(null)
     setEditor(null)
+    setShowMyNotes(false)
+    setShowMyGroups(false)
     setPicking(true)
+  }
+
+  function requestOpenPanel(panel: 'myNotes' | 'myGroups') {
+    if (editor) {
+      const ok = window.confirm(
+        'Discard this note draft? Unsaved changes will be lost.',
+      )
+      if (!ok) return
+      setEditor(null)
+    }
+    setSelected(null)
+    setPicking(false)
+    if (panel === 'myNotes') {
+      setShowMyGroups(false)
+      setShowMyNotes(true)
+    } else {
+      setShowMyNotes(false)
+      setShowMyGroups(true)
+    }
   }
 
   function handleUseMyLocation() {
@@ -206,22 +227,8 @@ export default function App() {
           </button>
           {session ? (
             <>
-              <button
-                onClick={() => {
-                  setShowMyGroups(false)
-                  setShowMyNotes(true)
-                }}
-              >
-                My notes
-              </button>
-              <button
-                onClick={() => {
-                  setShowMyNotes(false)
-                  setShowMyGroups(true)
-                }}
-              >
-                My Groups
-              </button>
+              <button onClick={() => requestOpenPanel('myNotes')}>My notes</button>
+              <button onClick={() => requestOpenPanel('myGroups')}>My Groups</button>
               <button onClick={() => void signOut()} title={profile?.username}>
                 Log out{profile ? ` (${profile.username})` : ''}
               </button>
