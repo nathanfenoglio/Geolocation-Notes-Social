@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { useAuth } from './lib/auth'
 import { deleteNote, fetchNotesForFilter, fetchNotesInBounds } from './lib/notesApi'
+import {
+  fetchNewNotificationNotes,
+  fetchNotificationSettings,
+  markNotificationsSeen,
+} from './lib/notificationsApi'
 import { flyTargetFromNotes } from './lib/mapFit'
 import { useGeolocation } from './lib/useGeolocation'
 import type { Session } from '@supabase/supabase-js'
@@ -13,6 +18,7 @@ import NoteDetail from './components/NoteDetail'
 import NoteEditor from './components/NoteEditor'
 import MyNotes from './components/MyNotes'
 import MyGroups from './components/MyGroups'
+import NotificationsPanel from './components/NotificationsPanel'
 
 interface EditorState {
   note: Note | null
@@ -28,6 +34,9 @@ export default function App() {
   const [showAuth, setShowAuth] = useState(false)
   const [showMyNotes, setShowMyNotes] = useState(false)
   const [showMyGroups, setShowMyGroups] = useState(false)
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [notifSnapshot, setNotifSnapshot] = useState<Note[]>([])
+  const [notifCount, setNotifCount] = useState(0)
   const [picking, setPicking] = useState(false)
   const [flyTo, setFlyTo] = useState<FlyTarget | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -82,6 +91,9 @@ export default function App() {
     setEditor(null)
     setShowMyNotes(false)
     setShowMyGroups(false)
+    setShowNotifications(false)
+    setNotifSnapshot([])
+    setNotifCount(0)
     setShowAuth(false)
     setPicking(false)
     setFollowing(false)
@@ -93,6 +105,24 @@ export default function App() {
     setRefreshKey((k) => k + 1)
     reloadNotes()
   }, [session, reloadNotes])
+
+  const refreshNotifBadge = useCallback(async () => {
+    if (!session?.user) {
+      setNotifCount(0)
+      return
+    }
+    try {
+      const settings = await fetchNotificationSettings(session.user.id)
+      const list = await fetchNewNotificationNotes(session.user.id, settings)
+      setNotifCount(list.length)
+    } catch (err) {
+      console.error('Failed to load notification count:', err)
+    }
+  }, [session?.user?.id])
+
+  useEffect(() => {
+    void refreshNotifBadge()
+  }, [refreshNotifBadge])
 
   // On filter change: fetch the full matching set and fit the map (skip first mount).
   useEffect(() => {
@@ -140,6 +170,7 @@ export default function App() {
     setSelected(null)
     setShowMyNotes(false)
     setShowMyGroups(false)
+    setShowNotifications(false)
     setEditor({ note: null, lat, lng })
   }
 
@@ -152,25 +183,59 @@ export default function App() {
     setEditor(null)
     setShowMyNotes(false)
     setShowMyGroups(false)
+    setShowNotifications(false)
     setPicking(true)
   }
 
+  function confirmLeaveEditor(): boolean {
+    if (!editor) return true
+    const ok = window.confirm(
+      'Discard this note draft? Unsaved changes will be lost.',
+    )
+    if (!ok) return false
+    setEditor(null)
+    return true
+  }
+
   function requestOpenPanel(panel: 'myNotes' | 'myGroups') {
-    if (editor) {
-      const ok = window.confirm(
-        'Discard this note draft? Unsaved changes will be lost.',
-      )
-      if (!ok) return
-      setEditor(null)
-    }
+    if (!confirmLeaveEditor()) return
     setSelected(null)
     setPicking(false)
+    setShowNotifications(false)
     if (panel === 'myNotes') {
       setShowMyGroups(false)
       setShowMyNotes(true)
     } else {
       setShowMyNotes(false)
       setShowMyGroups(true)
+    }
+  }
+
+  async function openNotifications() {
+    if (!session?.user) return
+    if (!confirmLeaveEditor()) return
+    setSelected(null)
+    setPicking(false)
+    setShowMyNotes(false)
+    setShowMyGroups(false)
+
+    try {
+      const settings = await fetchNotificationSettings(session.user.id)
+      const list = await fetchNewNotificationNotes(session.user.id, settings)
+      setNotifSnapshot(list)
+      setShowNotifications(true)
+      if (list.length > 0) {
+        handleMapFilterChange({
+          type: 'notifications',
+          noteIds: list.map((n) => n.id),
+          name: 'New notes',
+        })
+      }
+      await markNotificationsSeen(session.user.id)
+      setNotifCount(0)
+    } catch (err) {
+      console.error('Failed to open notifications:', err)
+      showToast('Could not load notifications.')
     }
   }
 
@@ -249,6 +314,14 @@ export default function App() {
 
   function handleSelectFromList(note: Note) {
     setShowMyNotes(false)
+    setShowNotifications(false)
+    setSelected(note)
+    setFollowing(false)
+    setFlyTo({ lat: note.lat, lng: note.lng, zoom: 15 })
+  }
+
+  function handleSelectNotification(note: Note) {
+    setShowNotifications(false)
     setSelected(note)
     setFollowing(false)
     setFlyTo({ lat: note.lat, lng: note.lng, zoom: 15 })
@@ -270,6 +343,25 @@ export default function App() {
           </button>
           {session ? (
             <>
+              <button
+                type="button"
+                className="notif-bell"
+                onClick={() => void openNotifications()}
+                aria-label={
+                  notifCount > 0
+                    ? `Notifications, ${notifCount} new`
+                    : 'Notifications'
+                }
+              >
+                <span className="notif-bell-icon" aria-hidden="true">
+                  🔔
+                </span>
+                {notifCount > 0 && (
+                  <span className="notif-badge">
+                    {notifCount > 99 ? '99+' : notifCount}
+                  </span>
+                )}
+              </button>
               <button onClick={() => requestOpenPanel('myNotes')}>My notes</button>
               <button onClick={() => requestOpenPanel('myGroups')}>Groups</button>
               <button onClick={() => void signOut()} title={profile?.username}>
@@ -324,6 +416,7 @@ export default function App() {
             setEditor(null)
             setShowMyNotes(false)
             setShowMyGroups(false)
+            setShowNotifications(false)
             setSelected(note)
           }}
           onLocateClick={handleLocateClick}
@@ -352,7 +445,7 @@ export default function App() {
           />
         )}
 
-        {showMyNotes && !selected && !editor && (
+        {showMyNotes && !selected && !editor && !showNotifications && (
           <MyNotes
             onSelect={handleSelectFromList}
             onClose={() => setShowMyNotes(false)}
@@ -360,11 +453,23 @@ export default function App() {
           />
         )}
 
-        {showMyGroups && !selected && !editor && !showMyNotes && (
+        {showMyGroups && !selected && !editor && !showMyNotes && !showNotifications && (
           <MyGroups
             onClose={() => setShowMyGroups(false)}
             mapFilter={mapFilter}
             onMapFilterChange={handleMapFilterChange}
+          />
+        )}
+
+        {showNotifications && !selected && !editor && !showMyNotes && !showMyGroups && (
+          <NotificationsPanel
+            notes={notifSnapshot}
+            onClose={() => {
+              setShowNotifications(false)
+              void refreshNotifBadge()
+            }}
+            onSelect={handleSelectNotification}
+            onSettingsChanged={() => void refreshNotifBadge()}
           />
         )}
       </main>

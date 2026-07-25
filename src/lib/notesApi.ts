@@ -7,16 +7,20 @@ import type { MapBounds, MapNoteFilter, MediaType, Note, Visibility } from './ty
 // (id, username) specifies only to grab these fields from the JOIN to the profiles table
 // note_media is a JOIN on the note_media table, doesn't specify foreign key explicitly but foreign key note_media_note_id_fkey relates notes table to note_media table notes.id = note_id
 // (id, note_id, storage_path, media_type, size_bytes) are the specific fields to be returned by the notes, note_media JOIN
-const NOTE_SELECT =
+export const NOTE_SELECT =
   'id, author_id, lat, lng, title, body, visibility, note_date, created_at, updated_at, author:profiles!notes_author_id_fkey(id, username), note_media(id, note_id, storage_path, media_type, size_bytes)'
 
 // check if db returned author: (id, username) as {(id, username)} and get rid of the outer array holder if it exists
-function normalize(row: Record<string, unknown>): Note {
+export function normalizeNote(row: Record<string, unknown>): Note {
   const author = row.author
   return {
     ...(row as unknown as Note),
     author: Array.isArray(author) ? author[0] : (author as Note['author']),
   }
+}
+
+function normalize(row: Record<string, unknown>): Note {
+  return normalizeNote(row)
 }
 
 function applyBounds<T extends { gte: (c: string, v: number) => T; lte: (c: string, v: number) => T }>(
@@ -93,6 +97,21 @@ async function queryNotes(
     return [...byId.values()]
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .slice(0, 500)
+  }
+
+  if (filter?.type === 'notifications') {
+    if (filter.noteIds.length === 0) return []
+    const { data, error } = await applyBounds(
+      supabase
+        .from('notes')
+        .select(NOTE_SELECT)
+        .in('id', filter.noteIds)
+        .order('created_at', { ascending: false })
+        .limit(500),
+      bounds,
+    )
+    if (error) throw error
+    return ((data ?? []) as Record<string, unknown>[]).map(normalize)
   }
 
   let query = applyBounds(

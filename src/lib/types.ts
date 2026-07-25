@@ -52,6 +52,18 @@ export type MapNoteFilter =
   | { type: 'private'; userId: string }
   | { type: 'group'; groupId: string; name: string }
   | { type: 'direct'; peerId: string; viewerId: string; name: string }
+  | { type: 'notifications'; noteIds: string[]; name: string }
+
+export type NotificationMuteKind = 'group' | 'peer' | 'public_author'
+
+export interface NotificationSettings {
+  seenAt: string | null
+  profileCreatedAt: string
+  notifyPublic: boolean
+  mutedGroupIds: string[]
+  mutedPeerIds: string[]
+  mutedPublicAuthorIds: string[]
+}
 
 /** Row in the Groups panel All list (real group or virtual direct-share peer). */
 export type GroupsPanelItem =

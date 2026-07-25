@@ -40,6 +40,8 @@ Open the Supabase Dashboard → SQL Editor → New query. For each file below, p
 1. [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql) — `profiles`, `notes`, `note_shares`, `note_media`, auth trigger, storage bucket
 2. [`supabase/migrations/002_groups.sql`](supabase/migrations/002_groups.sql) — user groups, group membership, group note shares, and RLS policies
 3. [`supabase/migrations/003_fix_user_groups_select.sql`](supabase/migrations/003_fix_user_groups_select.sql) — fixes group create when the app returns the new row (INSERT RETURNING)
+4. [`supabase/migrations/004_notifications.sql`](supabase/migrations/004_notifications.sql) — notification seen timestamp, public toggle, mute list
+5. [`supabase/migrations/005_public_author_mutes.sql`](supabase/migrations/005_public_author_mutes.sql) — per-author mutes for public-note notifications
 
 If group policies were never applied, also run [`supabase/migrations/002b_groups_policies_repair.sql`](supabase/migrations/002b_groups_policies_repair.sql) before step 3.
 
