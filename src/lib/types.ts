@@ -49,6 +49,7 @@ export interface MapBounds {
 export type MapNoteFilter =
   | null
   | { type: 'author'; userId: string }
+  | { type: 'private'; userId: string }
   | { type: 'group'; groupId: string; name: string }
   | { type: 'direct'; sharerId: string; viewerId: string; name: string }
 

@@ -26,7 +26,7 @@ export default function MyGroups({
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [listTab, setListTab] = useState<ListTab>(
-    mapFilter?.type === 'author' ? 'owner' : 'all',
+    mapFilter?.type === 'author' || mapFilter?.type === 'private' ? 'owner' : 'all',
   )
 
   useEffect(() => {
@@ -55,6 +55,7 @@ export default function MyGroups({
 
   const selectedGroupId = mapFilter?.type === 'group' ? mapFilter.groupId : null
   const selectedSharerId = mapFilter?.type === 'direct' ? mapFilter.sharerId : null
+  const privateSelected = mapFilter?.type === 'private'
 
   function clearToTabDefault() {
     if (listTab === 'owner' && session?.user) {
@@ -72,6 +73,16 @@ export default function MyGroups({
     } else {
       onMapFilterChange(null)
     }
+  }
+
+  function handlePrivateClick() {
+    if (!session?.user) return
+    setExpandedId(null)
+    if (privateSelected) {
+      clearToTabDefault()
+      return
+    }
+    onMapFilterChange({ type: 'private', userId: session.user.id })
   }
 
   function handleGroupClick(group: Group) {
@@ -156,6 +167,22 @@ export default function MyGroups({
           <>
             {listEmpty && <p className="note-meta">{emptyCopy}</p>}
             <ul className="my-groups-list">
+              <li>
+                <button
+                  type="button"
+                  className={[
+                    'my-group-row',
+                    'direct-share-row',
+                    privateSelected ? 'filter-active' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onClick={handlePrivateClick}
+                >
+                  <span className="my-group-name">Private</span>
+                  <span className="my-group-count">my notes</span>
+                </button>
+              </li>
               {visibleGroups.map((g) => (
                 <li key={g.id}>
                   <button

@@ -264,7 +264,11 @@ export default function App() {
         <div className="filter-chip">
           <span>
             Filtered:{' '}
-            {mapFilter.type === 'author' ? 'my notes' : mapFilter.name}
+            {mapFilter.type === 'author'
+              ? 'my notes'
+              : mapFilter.type === 'private'
+                ? 'private'
+                : mapFilter.name}
           </span>
           <button
             type="button"

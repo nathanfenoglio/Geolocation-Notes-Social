@@ -5,7 +5,7 @@ import type { MapBounds, MapNoteFilter, MediaType, Note, Visibility } from './ty
 // author: names the alias of the result from the JOIN to the profiles table
 // !notes_author_id_fkey specifies the foreign key in the profiles table
 // (id, username) specifies only to grab these fields from the JOIN to the profiles table
-// note_media is a JOIN on the note_media table, doesn't specify foreign key explicitly but foreign key note_media_note_id_fkey relates notes table to nodes_media table notes.id = note_id
+// note_media is a JOIN on the note_media table, doesn't specify foreign key explicitly but foreign key note_media_note_id_fkey relates notes table to note_media table notes.id = note_id
 // (id, note_id, storage_path, media_type, size_bytes) are the specific fields to be returned by the notes, note_media JOIN
 const NOTE_SELECT =
   'id, author_id, lat, lng, title, body, visibility, note_date, created_at, updated_at, author:profiles!notes_author_id_fkey(id, username), note_media(id, note_id, storage_path, media_type, size_bytes)'
@@ -71,6 +71,8 @@ export async function fetchNotesInBounds(
 
   if (filter?.type === 'author') {
     query = query.eq('author_id', filter.userId)
+  } else if (filter?.type === 'private') {
+    query = query.eq('author_id', filter.userId).eq('visibility', 'private')
   }
 
   const { data, error } = await query
