@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { MapBounds, MediaType, Note, Visibility } from './types'
+import type { MapBounds, MapNoteFilter, MediaType, Note, Visibility } from './types'
 
 // SELECT and JOIN clauses
 // author: names the alias of the result from the JOIN to the profiles table
@@ -20,18 +20,62 @@ function normalize(row: Record<string, unknown>): Note {
 }
 
 /** Fetch all notes visible to the current user within map bounds (RLS filters visibility). */
-export async function fetchNotesInBounds(bounds: MapBounds): Promise<Note[]> {
-  const { data, error } = await supabase
-    .from('notes') // target table
-    .select(NOTE_SELECT) // select fields 
-    .gte('lat', bounds.south) // WHERE lat >= south latitude of bounds
+export async function fetchNotesInBounds(
+  bounds: MapBounds,
+  filter: MapNoteFilter = null,
+): Promise<Note[]> {
+  if (filter?.type === 'group') {
+    const { data, error } = await supabase
+      .from('notes')
+      .select(
+        `${NOTE_SELECT}, note_group_shares!inner(group_id)` as typeof NOTE_SELECT,
+      )
+      .eq('note_group_shares.group_id', filter.groupId)
+      .gte('lat', bounds.south)
+      .lte('lat', bounds.north)
+      .gte('lng', bounds.west)
+      .lte('lng', bounds.east)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (error) throw error
+    return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalize)
+  }
+
+  if (filter?.type === 'direct') {
+    const { data, error } = await supabase
+      .from('notes')
+      .select(
+        `${NOTE_SELECT}, note_shares!inner(shared_with)` as typeof NOTE_SELECT,
+      )
+      .eq('author_id', filter.sharerId)
+      .eq('note_shares.shared_with', filter.viewerId)
+      .gte('lat', bounds.south)
+      .lte('lat', bounds.north)
+      .gte('lng', bounds.west)
+      .lte('lng', bounds.east)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (error) throw error
+    return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalize)
+  }
+
+  let query = supabase
+    .from('notes')
+    .select(NOTE_SELECT)
+    .gte('lat', bounds.south)
     .lte('lat', bounds.north)
     .gte('lng', bounds.west)
     .lte('lng', bounds.east)
-    .order('created_at', { ascending: false }) // ORDER BY created_at
+    .order('created_at', { ascending: false })
     .limit(500)
+
+  if (filter?.type === 'author') {
+    query = query.eq('author_id', filter.userId)
+  }
+
+  const { data, error } = await query
   if (error) throw error
-  return (data ?? []).map(normalize)
+  return ((data ?? []) as Record<string, unknown>[]).map(normalize)
 }
 
 export async function fetchMyNotes(userId: string): Promise<Note[]> {

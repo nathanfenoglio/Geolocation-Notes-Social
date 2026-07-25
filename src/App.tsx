@@ -4,7 +4,7 @@ import { useAuth } from './lib/auth'
 import { deleteNote, fetchNotesInBounds } from './lib/notesApi'
 import { useGeolocation } from './lib/useGeolocation'
 import type { Session } from '@supabase/supabase-js'
-import type { GeocodeResult, MapBounds, Note } from './lib/types'
+import type { GeocodeResult, MapBounds, MapNoteFilter, Note } from './lib/types'
 import MapView, { type FlyTarget } from './components/MapView'
 import SearchBar from './components/SearchBar'
 import AuthModal from './components/AuthModal'
@@ -32,11 +32,14 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [following, setFollowing] = useState(false)
+  const [mapFilter, setMapFilter] = useState<MapNoteFilter>(null)
   const { position: myPosition, error: geoError } = useGeolocation()
   const boundsRef = useRef<MapBounds | null>(null)
+  const mapFilterRef = useRef<MapNoteFilter>(null)
   const fetchTimer = useRef<number | undefined>(undefined)
   const initialCentered = useRef(false)
   const prevSessionRef = useRef<Session | null>(session)
+  mapFilterRef.current = mapFilter
 
   // Center the map on the user's location once, when the first fix arrives.
   // Skipped if the map has already been sent somewhere (e.g. a search).
@@ -49,10 +52,15 @@ export default function App() {
   const reloadNotes = useCallback(() => {
     const bounds = boundsRef.current
     if (!bounds) return
-    fetchNotesInBounds(bounds)
+    fetchNotesInBounds(bounds, mapFilterRef.current)
       .then(setNotes)
       .catch((err) => console.error('Failed to load notes:', err))
   }, [])
+
+  function handleMapFilterChange(filter: MapNoteFilter) {
+    setSelected(null)
+    setMapFilter(filter)
+  }
 
   // When the user logs out, clear auth-dependent UI and reload public notes.
   useEffect(() => {
@@ -70,10 +78,17 @@ export default function App() {
     setPicking(false)
     setFollowing(false)
     setToast(null)
+    setMapFilter(null)
+    mapFilterRef.current = null
     setNotes([])
     setRefreshKey((k) => k + 1)
     reloadNotes()
   }, [session, reloadNotes])
+
+  // Refetch whenever the map filter changes.
+  useEffect(() => {
+    reloadNotes()
+  }, [mapFilter, reloadNotes])
 
   const handleBoundsChange = useCallback(
     (bounds: MapBounds) => {
@@ -226,7 +241,7 @@ export default function App() {
           {session ? (
             <>
               <button onClick={() => requestOpenPanel('myNotes')}>My notes</button>
-              <button onClick={() => requestOpenPanel('myGroups')}>My Groups</button>
+              <button onClick={() => requestOpenPanel('myGroups')}>Groups</button>
               <button onClick={() => void signOut()} title={profile?.username}>
                 Log out{profile ? ` (${profile.username})` : ''}
               </button>
@@ -242,6 +257,23 @@ export default function App() {
           <span>Tap anywhere on the map to place your note</span>
           <button onClick={handleUseMyLocation}>Use my location</button>
           <button onClick={() => setPicking(false)}>Cancel</button>
+        </div>
+      )}
+
+      {!picking && mapFilter && (
+        <div className="filter-chip">
+          <span>
+            Filtered:{' '}
+            {mapFilter.type === 'author' ? 'my notes' : mapFilter.name}
+          </span>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Clear map filter"
+            onClick={() => handleMapFilterChange(null)}
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -295,7 +327,11 @@ export default function App() {
         )}
 
         {showMyGroups && !selected && !editor && !showMyNotes && (
-          <MyGroups onClose={() => setShowMyGroups(false)} />
+          <MyGroups
+            onClose={() => setShowMyGroups(false)}
+            mapFilter={mapFilter}
+            onMapFilterChange={handleMapFilterChange}
+          />
         )}
       </main>
 

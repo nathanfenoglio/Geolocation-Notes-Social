@@ -169,6 +169,30 @@
   max-width: calc(100vw - 2rem);
 }
 
+.filter-chip {
+  position: absolute;
+  top: 4.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.45rem 0.35rem 0.85rem;
+  z-index: 1050;
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+  max-width: calc(100vw - 2rem);
+}
+
+.filter-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- Side panel / bottom sheet ---------- */
 
 .panel {
@@ -197,6 +221,34 @@
 .panel-header h2 {
   margin: 0;
   font-size: 1.05rem;
+}
+
+.panel-segments {
+  display: flex;
+  gap: 0.2rem;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 0.15rem;
+}
+
+.panel-segments button {
+  background: transparent;
+  border: none;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+.panel-segments button:hover {
+  color: var(--text);
+  background: transparent;
+}
+
+.panel-segments button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .panel-body {
@@ -394,6 +446,26 @@
 
 .my-group-row.expanded {
   outline: 1px solid var(--accent);
+}
+
+.my-group-row.filter-active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-2));
+  outline: 1px solid var(--accent);
+}
+
+.my-group-row.direct-share-row {
+  background: transparent;
+  border: 1px dashed var(--border);
+}
+
+.my-group-row.direct-share-row:hover {
+  background: var(--surface-2);
+}
+
+.my-group-row.direct-share-row.filter-active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-2));
+  border-style: solid;
+  border-color: var(--accent);
 }
 
 .my-group-name {
@@ -610,7 +682,8 @@
     border-radius: var(--radius) var(--radius) 0 0;
   }
 
-  .pick-banner {
+  .pick-banner,
+  .filter-chip {
     top: auto;
     bottom: 1rem;
   }

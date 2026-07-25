@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Group, Profile } from './types'
+import type { Group, GroupsPanelItem, Profile } from './types'
 
 interface GroupRow {
   id: string
@@ -25,6 +25,70 @@ export async function fetchMyGroups(): Promise<Group[]> {
     .order('name')
   if (error) throw error
   return ((data ?? []) as GroupRow[]).map(toGroup)
+}
+
+interface DirectShareRow {
+  note_id: string
+  note:
+    | {
+        author_id: string
+        author: { id: string; username: string } | { id: string; username: string }[] | null
+      }
+    | {
+        author_id: string
+        author: { id: string; username: string } | { id: string; username: string }[] | null
+      }[]
+    | null
+}
+
+/** Real groups plus virtual "From {username}" sources (direct note_shares). */
+export async function fetchGroupsPanelItems(
+  viewerId: string,
+): Promise<{ groups: Group[]; items: GroupsPanelItem[] }> {
+  const groups = await fetchMyGroups()
+
+  const { data, error } = await supabase
+    .from('note_shares')
+    .select(
+      'note_id, note:notes!inner(author_id, author:profiles!notes_author_id_fkey(id, username))',
+    )
+    .eq('shared_with', viewerId)
+  if (error) throw error
+
+  const bySharer = new Map<string, { username: string; noteIds: Set<string> }>()
+  for (const row of (data ?? []) as DirectShareRow[]) {
+    const note = Array.isArray(row.note) ? row.note[0] : row.note
+    if (!note) continue
+    const author = Array.isArray(note.author) ? note.author[0] : note.author
+    if (!author?.id) continue
+    // Skip shares of your own notes (shouldn't appear as recipient, but be safe).
+    if (author.id === viewerId) continue
+    const existing = bySharer.get(author.id)
+    if (existing) {
+      existing.noteIds.add(row.note_id)
+    } else {
+      bySharer.set(author.id, {
+        username: author.username,
+        noteIds: new Set([row.note_id]),
+      })
+    }
+  }
+
+  const directShares = [...bySharer.entries()]
+    .map(([sharerId, { username, noteIds }]) => ({
+      kind: 'direct' as const,
+      sharerId,
+      username,
+      noteCount: noteIds.size,
+    }))
+    .sort((a, b) => a.username.localeCompare(b.username))
+
+  const items: GroupsPanelItem[] = [
+    ...groups.map((group) => ({ kind: 'group' as const, group })),
+    ...directShares,
+  ]
+
+  return { groups, items }
 }
 
 export async function createGroup(

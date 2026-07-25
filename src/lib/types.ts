@@ -45,6 +45,18 @@ export interface MapBounds {
   west: number
 }
 
+/** Client-side map note filter driven from the Groups panel. */
+export type MapNoteFilter =
+  | null
+  | { type: 'author'; userId: string }
+  | { type: 'group'; groupId: string; name: string }
+  | { type: 'direct'; sharerId: string; viewerId: string; name: string }
+
+/** Row in the Groups panel All list (real group or virtual direct-share source). */
+export type GroupsPanelItem =
+  | { kind: 'group'; group: Group }
+  | { kind: 'direct'; sharerId: string; username: string; noteCount: number }
+
 export interface GeocodeResult {
   place_id: number
   display_name: string
