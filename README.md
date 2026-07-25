@@ -42,6 +42,7 @@ Open the Supabase Dashboard → SQL Editor → New query. For each file below, p
 3. [`supabase/migrations/003_fix_user_groups_select.sql`](supabase/migrations/003_fix_user_groups_select.sql) — fixes group create when the app returns the new row (INSERT RETURNING)
 4. [`supabase/migrations/004_notifications.sql`](supabase/migrations/004_notifications.sql) — notification seen timestamp, public toggle, mute list
 5. [`supabase/migrations/005_public_author_mutes.sql`](supabase/migrations/005_public_author_mutes.sql) — per-author mutes for public-note notifications
+6. [`supabase/migrations/006_note_engagement.sql`](supabase/migrations/006_note_engagement.sql) — note replies and emoji reactions
 
 If group policies were never applied, also run [`supabase/migrations/002b_groups_policies_repair.sql`](supabase/migrations/002b_groups_policies_repair.sql) before step 3.
 

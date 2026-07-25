@@ -198,9 +198,26 @@ function mergeNotes(rows: Record<string, unknown>[]): Note[] {
   )
 }
 
+function extractJoinedNotes(
+  rows: Array<{ notes?: Record<string, unknown> | Record<string, unknown>[] | null }>,
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  for (const row of rows) {
+    const n = row.notes
+    if (!n) continue
+    if (Array.isArray(n)) {
+      if (n[0]) out.push(n[0])
+    } else {
+      out.push(n)
+    }
+  }
+  return out
+}
+
 /**
  * Notes the user didn't author, created after seenAt, matching enabled channels
- * (direct share / unmuted group share / public if enabled).
+ * (direct share / unmuted group share / public if enabled), plus the user's own
+ * notes that received replies/reactions from others after seenAt.
  */
 export async function fetchNewNotificationNotes(
   userId: string,
@@ -279,6 +296,50 @@ export async function fetchNewNotificationNotes(
         if (!unmuted) continue
         collected.push(row)
       }
+    })(),
+  )
+
+  // Owner engagement: replies/reactions on the user's notes (mutes do not apply).
+  const noteEmbed = `notes!inner(${NOTE_SELECT})`
+  tasks.push(
+    (async () => {
+      const { data, error } = await supabase
+        .from('note_replies')
+        .select(noteEmbed)
+        .neq('author_id', userId)
+        .gt('created_at', since)
+        .eq('notes.author_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(MAX_NOTIFICATION_NOTES)
+      if (error) throw error
+      collected.push(
+        ...extractJoinedNotes(
+          (data ?? []) as Array<{
+            notes?: Record<string, unknown> | Record<string, unknown>[] | null
+          }>,
+        ),
+      )
+    })(),
+  )
+
+  tasks.push(
+    (async () => {
+      const { data, error } = await supabase
+        .from('note_reactions')
+        .select(noteEmbed)
+        .neq('user_id', userId)
+        .gt('created_at', since)
+        .eq('notes.author_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(MAX_NOTIFICATION_NOTES)
+      if (error) throw error
+      collected.push(
+        ...extractJoinedNotes(
+          (data ?? []) as Array<{
+            notes?: Record<string, unknown> | Record<string, unknown>[] | null
+          }>,
+        ),
+      )
     })(),
   )
 

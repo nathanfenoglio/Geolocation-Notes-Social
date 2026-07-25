@@ -282,7 +282,9 @@ export default function NotificationsPanel({
             </ul>
           )
         ) : notes.length === 0 ? (
-          <p className="note-meta">No new notes since your last visit.</p>
+          <p className="note-meta">
+            No new notes, replies, or reactions since your last visit.
+          </p>
         ) : (
           <ul className="notif-notes-list">
             {notes.map((n) => (

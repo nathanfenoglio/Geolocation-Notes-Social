@@ -31,6 +31,22 @@ export interface Note {
   note_media?: NoteMedia[]
 }
 
+export interface NoteReply {
+  id: string
+  note_id: string
+  author_id: string
+  body: string
+  created_at: string
+  author?: Profile
+}
+
+export interface NoteReaction {
+  note_id: string
+  user_id: string
+  emoji: string
+  created_at: string
+}
+
 export interface Group {
   id: string
   owner_id: string
