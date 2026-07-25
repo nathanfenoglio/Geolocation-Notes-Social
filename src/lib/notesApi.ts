@@ -19,55 +19,63 @@ function normalize(row: Record<string, unknown>): Note {
   }
 }
 
-/** Fetch all notes visible to the current user within map bounds (RLS filters visibility). */
-export async function fetchNotesInBounds(
-  bounds: MapBounds,
-  filter: MapNoteFilter = null,
+function applyBounds<T extends { gte: (c: string, v: number) => T; lte: (c: string, v: number) => T }>(
+  query: T,
+  bounds: MapBounds | undefined,
+): T {
+  if (!bounds) return query
+  return query
+    .gte('lat', bounds.south)
+    .lte('lat', bounds.north)
+    .gte('lng', bounds.west)
+    .lte('lng', bounds.east)
+}
+
+async function queryNotes(
+  filter: MapNoteFilter,
+  bounds?: MapBounds,
 ): Promise<Note[]> {
   if (filter?.type === 'group') {
-    const { data, error } = await supabase
-      .from('notes')
-      .select(
-        `${NOTE_SELECT}, note_group_shares!inner(group_id)` as typeof NOTE_SELECT,
-      )
-      .eq('note_group_shares.group_id', filter.groupId)
-      .gte('lat', bounds.south)
-      .lte('lat', bounds.north)
-      .gte('lng', bounds.west)
-      .lte('lng', bounds.east)
-      .order('created_at', { ascending: false })
-      .limit(500)
+    const { data, error } = await applyBounds(
+      supabase
+        .from('notes')
+        .select(
+          `${NOTE_SELECT}, note_group_shares!inner(group_id)` as typeof NOTE_SELECT,
+        )
+        .eq('note_group_shares.group_id', filter.groupId)
+        .order('created_at', { ascending: false })
+        .limit(500),
+      bounds,
+    )
     if (error) throw error
     return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalize)
   }
 
   if (filter?.type === 'direct') {
-    const { data, error } = await supabase
-      .from('notes')
-      .select(
-        `${NOTE_SELECT}, note_shares!inner(shared_with)` as typeof NOTE_SELECT,
-      )
-      .eq('author_id', filter.sharerId)
-      .eq('note_shares.shared_with', filter.viewerId)
-      .gte('lat', bounds.south)
-      .lte('lat', bounds.north)
-      .gte('lng', bounds.west)
-      .lte('lng', bounds.east)
-      .order('created_at', { ascending: false })
-      .limit(500)
+    const { data, error } = await applyBounds(
+      supabase
+        .from('notes')
+        .select(
+          `${NOTE_SELECT}, note_shares!inner(shared_with)` as typeof NOTE_SELECT,
+        )
+        .eq('author_id', filter.sharerId)
+        .eq('note_shares.shared_with', filter.viewerId)
+        .order('created_at', { ascending: false })
+        .limit(500),
+      bounds,
+    )
     if (error) throw error
     return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalize)
   }
 
-  let query = supabase
-    .from('notes')
-    .select(NOTE_SELECT)
-    .gte('lat', bounds.south)
-    .lte('lat', bounds.north)
-    .gte('lng', bounds.west)
-    .lte('lng', bounds.east)
-    .order('created_at', { ascending: false })
-    .limit(500)
+  let query = applyBounds(
+    supabase
+      .from('notes')
+      .select(NOTE_SELECT)
+      .order('created_at', { ascending: false })
+      .limit(500),
+    bounds,
+  )
 
   if (filter?.type === 'author') {
     query = query.eq('author_id', filter.userId)
@@ -78,6 +86,21 @@ export async function fetchNotesInBounds(
   const { data, error } = await query
   if (error) throw error
   return ((data ?? []) as Record<string, unknown>[]).map(normalize)
+}
+
+/** Fetch notes visible to the current user within map bounds (RLS filters visibility). */
+export async function fetchNotesInBounds(
+  bounds: MapBounds,
+  filter: MapNoteFilter = null,
+): Promise<Note[]> {
+  return queryNotes(filter, bounds)
+}
+
+/** Fetch notes matching a filter with no viewport clip (for fit-to-markers). */
+export async function fetchNotesForFilter(
+  filter: MapNoteFilter = null,
+): Promise<Note[]> {
+  return queryNotes(filter)
 }
 
 export async function fetchMyNotes(userId: string): Promise<Note[]> {

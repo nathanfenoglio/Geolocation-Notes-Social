@@ -11,6 +11,9 @@ export interface FlyTarget {
   lng: number
   zoom?: number
   bounds?: LatLngBoundsExpression
+  /** Leaflet padding [x, y] from top-left / bottom-right when fitting bounds. */
+  paddingTopLeft?: [number, number]
+  paddingBottomRight?: [number, number]
 }
 
 interface MapViewProps {
@@ -73,7 +76,12 @@ function FlyController({
     }
     map.once('moveend', done)
     if (target.bounds) {
-      map.flyToBounds(target.bounds, { duration: 1.2, maxZoom: 16 })
+      map.flyToBounds(target.bounds, {
+        duration: 1.2,
+        maxZoom: 16,
+        paddingTopLeft: target.paddingTopLeft,
+        paddingBottomRight: target.paddingBottomRight,
+      })
     } else {
       map.flyTo([target.lat, target.lng], target.zoom ?? 14, { duration: 1.2 })
     }

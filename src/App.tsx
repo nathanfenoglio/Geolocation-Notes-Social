@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { useAuth } from './lib/auth'
-import { deleteNote, fetchNotesInBounds } from './lib/notesApi'
+import { deleteNote, fetchNotesForFilter, fetchNotesInBounds } from './lib/notesApi'
+import { flyTargetFromNotes } from './lib/mapFit'
 import { useGeolocation } from './lib/useGeolocation'
 import type { Session } from '@supabase/supabase-js'
 import type { GeocodeResult, MapBounds, MapNoteFilter, Note } from './lib/types'
@@ -39,6 +40,8 @@ export default function App() {
   const fetchTimer = useRef<number | undefined>(undefined)
   const initialCentered = useRef(false)
   const prevSessionRef = useRef<Session | null>(session)
+  const skipFilterFitRef = useRef(true)
+  const suppressFilterFitRef = useRef(false)
   mapFilterRef.current = mapFilter
 
   // Center the map on the user's location once, when the first fix arrives.
@@ -56,6 +59,11 @@ export default function App() {
       .then(setNotes)
       .catch((err) => console.error('Failed to load notes:', err))
   }, [])
+
+  function showToast(message: string) {
+    setToast(message)
+    window.setTimeout(() => setToast(null), 4000)
+  }
 
   function handleMapFilterChange(filter: MapNoteFilter) {
     setSelected(null)
@@ -78,6 +86,7 @@ export default function App() {
     setPicking(false)
     setFollowing(false)
     setToast(null)
+    suppressFilterFitRef.current = true
     setMapFilter(null)
     mapFilterRef.current = null
     setNotes([])
@@ -85,10 +94,36 @@ export default function App() {
     reloadNotes()
   }, [session, reloadNotes])
 
-  // Refetch whenever the map filter changes.
+  // On filter change: fetch the full matching set and fit the map (skip first mount).
   useEffect(() => {
-    reloadNotes()
-  }, [mapFilter, reloadNotes])
+    if (skipFilterFitRef.current) {
+      skipFilterFitRef.current = false
+      return
+    }
+    if (suppressFilterFitRef.current) {
+      suppressFilterFitRef.current = false
+      return
+    }
+
+    let cancelled = false
+    setFollowing(false)
+    fetchNotesForFilter(mapFilter)
+      .then((list) => {
+        if (cancelled) return
+        setNotes(list)
+        if (list.length === 0) {
+          showToast('No notes match')
+          return
+        }
+        const target = flyTargetFromNotes(list)
+        if (target) setFlyTo(target)
+      })
+      .catch((err) => console.error('Failed to load filtered notes:', err))
+
+    return () => {
+      cancelled = true
+    }
+  }, [mapFilter])
 
   const handleBoundsChange = useCallback(
     (bounds: MapBounds) => {
@@ -98,11 +133,6 @@ export default function App() {
     },
     [reloadNotes],
   )
-
-  function showToast(message: string) {
-    setToast(message)
-    window.setTimeout(() => setToast(null), 4000)
-  }
 
   function handleMapClick(lat: number, lng: number) {
     if (!picking) return
