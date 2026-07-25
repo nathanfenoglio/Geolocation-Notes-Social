@@ -43,6 +43,7 @@ Open the Supabase Dashboard → SQL Editor → New query. For each file below, p
 4. [`supabase/migrations/004_notifications.sql`](supabase/migrations/004_notifications.sql) — notification seen timestamp, public toggle, mute list
 5. [`supabase/migrations/005_public_author_mutes.sql`](supabase/migrations/005_public_author_mutes.sql) — per-author mutes for public-note notifications
 6. [`supabase/migrations/006_note_engagement.sql`](supabase/migrations/006_note_engagement.sql) — note replies and emoji reactions
+7. [`supabase/migrations/007_map_public_filter.sql`](supabase/migrations/007_map_public_filter.sql) — Groups panel public map filter prefs (separate from notification mutes)
 
 If group policies were never applied, also run [`supabase/migrations/002b_groups_policies_repair.sql`](supabase/migrations/002b_groups_policies_repair.sql) before step 3.
 

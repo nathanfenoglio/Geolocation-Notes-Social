@@ -66,11 +66,21 @@ export type MapNoteFilter =
   | null
   | { type: 'author'; userId: string }
   | { type: 'private'; userId: string }
+  | { type: 'public'; viewerId: string; name: string }
   | { type: 'group'; groupId: string; name: string }
   | { type: 'direct'; peerId: string; viewerId: string; name: string }
   | { type: 'notifications'; noteIds: string[]; name: string }
 
-export type NotificationMuteKind = 'group' | 'peer' | 'public_author'
+export type NotificationMuteKind =
+  | 'group'
+  | 'peer'
+  | 'public_author'
+  | 'map_public_author'
+
+export interface MapPublicFilterSettings {
+  mapShowPublic: boolean
+  mutedMapPublicAuthorIds: string[]
+}
 
 export interface NotificationSettings {
   seenAt: string | null

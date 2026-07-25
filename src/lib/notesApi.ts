@@ -1,3 +1,4 @@
+import { fetchMapPublicFilterSettings } from './mapPublicFilterApi'
 import { supabase } from './supabase'
 import type { MapBounds, MapNoteFilter, MediaType, Note, Visibility } from './types'
 
@@ -112,6 +113,26 @@ async function queryNotes(
     )
     if (error) throw error
     return ((data ?? []) as Record<string, unknown>[]).map(normalize)
+  }
+
+  if (filter?.type === 'public') {
+    const settings = await fetchMapPublicFilterSettings(filter.viewerId)
+    if (!settings.mapShowPublic) return []
+
+    const muted = new Set(settings.mutedMapPublicAuthorIds)
+    const { data, error } = await applyBounds(
+      supabase
+        .from('notes')
+        .select(NOTE_SELECT)
+        .eq('visibility', 'public')
+        .order('created_at', { ascending: false })
+        .limit(500),
+      bounds,
+    )
+    if (error) throw error
+    return ((data ?? []) as Record<string, unknown>[])
+      .map(normalize)
+      .filter((n) => !muted.has(n.author_id))
   }
 
   let query = applyBounds(
