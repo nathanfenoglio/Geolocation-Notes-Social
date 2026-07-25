@@ -51,12 +51,12 @@ export type MapNoteFilter =
   | { type: 'author'; userId: string }
   | { type: 'private'; userId: string }
   | { type: 'group'; groupId: string; name: string }
-  | { type: 'direct'; sharerId: string; viewerId: string; name: string }
+  | { type: 'direct'; peerId: string; viewerId: string; name: string }
 
-/** Row in the Groups panel All list (real group or virtual direct-share source). */
+/** Row in the Groups panel All list (real group or virtual direct-share peer). */
 export type GroupsPanelItem =
   | { kind: 'group'; group: Group }
-  | { kind: 'direct'; sharerId: string; username: string; noteCount: number }
+  | { kind: 'direct'; peerId: string; username: string; noteCount: number }
 
 export interface GeocodeResult {
   place_id: number

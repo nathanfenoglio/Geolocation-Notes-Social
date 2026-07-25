@@ -54,7 +54,7 @@ export default function MyGroups({
   }, [groups, listTab, session?.user?.id])
 
   const selectedGroupId = mapFilter?.type === 'group' ? mapFilter.groupId : null
-  const selectedSharerId = mapFilter?.type === 'direct' ? mapFilter.sharerId : null
+  const selectedPeerId = mapFilter?.type === 'direct' ? mapFilter.peerId : null
   const privateSelected = mapFilter?.type === 'private'
 
   function clearToTabDefault() {
@@ -98,15 +98,15 @@ export default function MyGroups({
   function handleDirectClick(item: Extract<GroupsPanelItem, { kind: 'direct' }>) {
     if (!session?.user) return
     setExpandedId(null)
-    if (selectedSharerId === item.sharerId) {
+    if (selectedPeerId === item.peerId) {
       clearToTabDefault()
       return
     }
     onMapFilterChange({
       type: 'direct',
-      sharerId: item.sharerId,
+      peerId: item.peerId,
       viewerId: session.user.id,
-      name: `From ${item.username}`,
+      name: item.username,
     })
   }
 
@@ -131,7 +131,7 @@ export default function MyGroups({
   const emptyCopy =
     listTab === 'owner'
       ? "You haven't created any groups yet. Groups let you share a note with many people at once."
-      : "You're not in any groups yet, and no one has shared notes with you directly. Create a group or ask someone to share."
+      : "You're not in any groups yet, and you have no direct shares with other users. Create a group or share a note by username."
 
   return (
     <aside className="panel">
@@ -213,19 +213,19 @@ export default function MyGroups({
               ))}
               {listTab === 'all' &&
                 directShares.map((item) => (
-                  <li key={`direct-${item.sharerId}`}>
+                  <li key={`direct-${item.peerId}`}>
                     <button
                       type="button"
                       className={[
                         'my-group-row',
                         'direct-share-row',
-                        selectedSharerId === item.sharerId ? 'filter-active' : '',
+                        selectedPeerId === item.peerId ? 'filter-active' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}
                       onClick={() => handleDirectClick(item)}
                     >
-                      <span className="my-group-name">From {item.username}</span>
+                      <span className="my-group-name">{item.username}</span>
                       <span className="my-group-count">
                         {item.noteCount}{' '}
                         {item.noteCount === 1 ? 'note' : 'notes'}

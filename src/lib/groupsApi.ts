@@ -27,7 +27,7 @@ export async function fetchMyGroups(): Promise<Group[]> {
   return ((data ?? []) as GroupRow[]).map(toGroup)
 }
 
-interface DirectShareRow {
+interface IncomingShareRow {
   note_id: string
   note:
     | {
@@ -41,43 +41,76 @@ interface DirectShareRow {
     | null
 }
 
-/** Real groups plus virtual "From {username}" sources (direct note_shares). */
+interface OutgoingNoteRow {
+  id: string
+  note_shares:
+    | {
+        shared_with: string
+        profile: { id: string; username: string } | { id: string; username: string }[] | null
+      }[]
+    | null
+}
+
+function addPeerNote(
+  byPeer: Map<string, { username: string; noteIds: Set<string> }>,
+  peerId: string,
+  username: string,
+  noteId: string,
+) {
+  const existing = byPeer.get(peerId)
+  if (existing) {
+    existing.noteIds.add(noteId)
+  } else {
+    byPeer.set(peerId, { username, noteIds: new Set([noteId]) })
+  }
+}
+
+/** Real groups plus one virtual row per direct-share peer (either direction). */
 export async function fetchGroupsPanelItems(
   viewerId: string,
 ): Promise<{ groups: Group[]; items: GroupsPanelItem[] }> {
   const groups = await fetchMyGroups()
+  const byPeer = new Map<string, { username: string; noteIds: Set<string> }>()
 
-  const { data, error } = await supabase
-    .from('note_shares')
-    .select(
-      'note_id, note:notes!inner(author_id, author:profiles!notes_author_id_fkey(id, username))',
-    )
-    .eq('shared_with', viewerId)
-  if (error) throw error
+  const [incoming, outgoing] = await Promise.all([
+    supabase
+      .from('note_shares')
+      .select(
+        'note_id, note:notes!inner(author_id, author:profiles!notes_author_id_fkey(id, username))',
+      )
+      .eq('shared_with', viewerId),
+    // Outgoing: notes I authored that have username shares.
+    supabase
+      .from('notes')
+      .select(
+        'id, note_shares!inner(shared_with, profile:profiles!note_shares_shared_with_fkey(id, username))',
+      )
+      .eq('author_id', viewerId),
+  ])
 
-  const bySharer = new Map<string, { username: string; noteIds: Set<string> }>()
-  for (const row of (data ?? []) as DirectShareRow[]) {
+  if (incoming.error) throw incoming.error
+  if (outgoing.error) throw outgoing.error
+
+  for (const row of (incoming.data ?? []) as IncomingShareRow[]) {
     const note = Array.isArray(row.note) ? row.note[0] : row.note
     if (!note) continue
     const author = Array.isArray(note.author) ? note.author[0] : note.author
-    if (!author?.id) continue
-    // Skip shares of your own notes (shouldn't appear as recipient, but be safe).
-    if (author.id === viewerId) continue
-    const existing = bySharer.get(author.id)
-    if (existing) {
-      existing.noteIds.add(row.note_id)
-    } else {
-      bySharer.set(author.id, {
-        username: author.username,
-        noteIds: new Set([row.note_id]),
-      })
+    if (!author?.id || author.id === viewerId) continue
+    addPeerNote(byPeer, author.id, author.username, row.note_id)
+  }
+
+  for (const row of (outgoing.data ?? []) as OutgoingNoteRow[]) {
+    for (const share of row.note_shares ?? []) {
+      const profile = Array.isArray(share.profile) ? share.profile[0] : share.profile
+      if (!profile?.id || profile.id === viewerId) continue
+      addPeerNote(byPeer, profile.id, profile.username, row.id)
     }
   }
 
-  const directShares = [...bySharer.entries()]
-    .map(([sharerId, { username, noteIds }]) => ({
+  const directShares = [...byPeer.entries()]
+    .map(([peerId, { username, noteIds }]) => ({
       kind: 'direct' as const,
-      sharerId,
+      peerId,
       username,
       noteCount: noteIds.size,
     }))

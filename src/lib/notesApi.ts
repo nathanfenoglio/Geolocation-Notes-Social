@@ -52,20 +52,47 @@ async function queryNotes(
   }
 
   if (filter?.type === 'direct') {
-    const { data, error } = await applyBounds(
-      supabase
-        .from('notes')
-        .select(
-          `${NOTE_SELECT}, note_shares!inner(shared_with)` as typeof NOTE_SELECT,
-        )
-        .eq('author_id', filter.sharerId)
-        .eq('note_shares.shared_with', filter.viewerId)
-        .order('created_at', { ascending: false })
-        .limit(500),
-      bounds,
-    )
-    if (error) throw error
-    return ((data ?? []) as unknown as Record<string, unknown>[]).map(normalize)
+    // Either direction: peer → me, or me → peer.
+    const [fromPeer, toPeer] = await Promise.all([
+      applyBounds(
+        supabase
+          .from('notes')
+          .select(
+            `${NOTE_SELECT}, note_shares!inner(shared_with)` as typeof NOTE_SELECT,
+          )
+          .eq('author_id', filter.peerId)
+          .eq('note_shares.shared_with', filter.viewerId)
+          .order('created_at', { ascending: false })
+          .limit(500),
+        bounds,
+      ),
+      applyBounds(
+        supabase
+          .from('notes')
+          .select(
+            `${NOTE_SELECT}, note_shares!inner(shared_with)` as typeof NOTE_SELECT,
+          )
+          .eq('author_id', filter.viewerId)
+          .eq('note_shares.shared_with', filter.peerId)
+          .order('created_at', { ascending: false })
+          .limit(500),
+        bounds,
+      ),
+    ])
+    if (fromPeer.error) throw fromPeer.error
+    if (toPeer.error) throw toPeer.error
+
+    const byId = new Map<string, Note>()
+    for (const row of [
+      ...((fromPeer.data ?? []) as unknown as Record<string, unknown>[]),
+      ...((toPeer.data ?? []) as unknown as Record<string, unknown>[]),
+    ]) {
+      const note = normalize(row)
+      byId.set(note.id, note)
+    }
+    return [...byId.values()]
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, 500)
   }
 
   let query = applyBounds(
