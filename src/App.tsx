@@ -209,8 +209,6 @@ export default function App() {
     setFlyTo({ lat: note.lat, lng: note.lng, zoom: 15 })
   }
 
-  const panelOpen = selected !== null || editor !== null || showMyNotes || showMyGroups
-
   return (
     <div className="app-shell">
       <header className="top-bar">
@@ -247,7 +245,7 @@ export default function App() {
         </div>
       )}
 
-      <main className={`map-area${panelOpen ? ' with-panel' : ''}`}>
+      <main className="map-area">
         <MapView
           notes={notes}
           flyTo={flyTo}
