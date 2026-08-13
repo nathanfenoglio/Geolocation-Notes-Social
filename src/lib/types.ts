@@ -91,6 +91,12 @@ export interface NotificationSettings {
   mutedPublicAuthorIds: string[]
 }
 
+/** One inbox row: a note keyed by latest notifiable activity time. */
+export interface NotificationListItem {
+  note: Note
+  activityAt: string
+}
+
 /** Row in the Groups panel All list (real group or virtual direct-share peer). */
 export type GroupsPanelItem =
   | { kind: 'group'; group: Group }

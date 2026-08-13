@@ -9,10 +9,17 @@ import {
   setPublicAuthorMuted,
   setPublicAuthorsAll,
 } from '../lib/notificationsApi'
-import type { Group, Note, NotificationSettings, Profile } from '../lib/types'
+import type {
+  Group,
+  Note,
+  NotificationListItem,
+  NotificationSettings,
+  Profile,
+} from '../lib/types'
 
 interface NotificationsPanelProps {
-  notes: Note[]
+  items: NotificationListItem[]
+  unreadNoteIds: Set<string>
   onClose: () => void
   onSelect: (note: Note) => void
   onSettingsChanged: () => void
@@ -32,7 +39,8 @@ function formatWhen(iso: string): string {
 }
 
 export default function NotificationsPanel({
-  notes,
+  items,
+  unreadNoteIds,
   onClose,
   onSelect,
   onSettingsChanged,
@@ -281,28 +289,34 @@ export default function NotificationsPanel({
               )}
             </ul>
           )
-        ) : notes.length === 0 ? (
-          <p className="note-meta">
-            No new notes, replies, or reactions since your last visit.
-          </p>
+        ) : items.length === 0 ? (
+          <p className="note-meta">No notifications yet.</p>
         ) : (
           <ul className="notif-notes-list">
-            {notes.map((n) => (
-              <li key={n.id}>
-                <button
-                  type="button"
-                  className="notif-note-row"
-                  onClick={() => onSelect(n)}
-                >
-                  <span className="notif-note-title">
-                    {n.title.trim() || '(untitled)'}
-                  </span>
-                  <span className="note-meta">
-                    {n.author?.username ?? 'someone'} · {formatWhen(n.created_at)}
-                  </span>
-                </button>
-              </li>
-            ))}
+            {items.map(({ note, activityAt }) => {
+              const unread = unreadNoteIds.has(note.id)
+              return (
+                <li key={note.id}>
+                  <button
+                    type="button"
+                    className={['notif-note-row', unread ? 'unread' : '']
+                      .filter(Boolean)
+                      .join(' ')}
+                    onClick={() => onSelect(note)}
+                  >
+                    <span className="notif-note-title-row">
+                      {unread && <span className="notif-unread-dot" aria-hidden="true" />}
+                      <span className="notif-note-title">
+                        {note.title.trim() || '(untitled)'}
+                      </span>
+                    </span>
+                    <span className="note-meta">
+                      {note.author?.username ?? 'someone'} · {formatWhen(activityAt)}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         )}
       </div>

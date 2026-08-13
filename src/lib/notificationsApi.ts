@@ -1,6 +1,12 @@
 import { supabase } from './supabase'
 import { NOTE_SELECT, normalizeNote } from './notesApi'
-import type { Note, NotificationMuteKind, NotificationSettings, Profile } from './types'
+import type {
+  Note,
+  NotificationListItem,
+  NotificationMuteKind,
+  NotificationSettings,
+  Profile,
+} from './types'
 
 const MAX_NOTIFICATION_NOTES = 100
 const FIRST_OPEN_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000
@@ -132,7 +138,6 @@ export async function setPublicAuthorMuted(
   settings: NotificationSettings,
 ): Promise<NotificationSettings> {
   if (!muted) {
-    // Enabling this author
     if (!settings.notifyPublic) {
       await updateNotifyPublic(userId, true)
       const others = allAuthorIds.filter((id) => id !== authorId)
@@ -158,13 +163,11 @@ export async function setPublicAuthorMuted(
     }
   }
 
-  // Muting this author
   await setMute(userId, 'public_author', authorId, true)
   const mutedPublicAuthorIds = settings.mutedPublicAuthorIds.includes(authorId)
     ? settings.mutedPublicAuthorIds
     : [...settings.mutedPublicAuthorIds, authorId]
 
-  // If every known author is muted, treat as public off.
   const allMuted =
     allAuthorIds.length > 0 &&
     allAuthorIds.every((id) => mutedPublicAuthorIds.includes(id))
@@ -187,66 +190,66 @@ export function notificationSince(settings: NotificationSettings): string {
   return settings.profileCreatedAt > lookback ? settings.profileCreatedAt : lookback
 }
 
-function mergeNotes(rows: Record<string, unknown>[]): Note[] {
-  const byId = new Map<string, Note>()
-  for (const row of rows) {
-    const note = normalizeNote(row)
-    byId.set(note.id, note)
-  }
-  return [...byId.values()].sort((a, b) =>
-    b.created_at.localeCompare(a.created_at),
-  )
+export function isNotificationUnread(
+  item: NotificationListItem,
+  since: string,
+): boolean {
+  return item.activityAt > since
 }
 
-function extractJoinedNotes(
-  rows: Array<{ notes?: Record<string, unknown> | Record<string, unknown>[] | null }>,
-): Record<string, unknown>[] {
-  const out: Record<string, unknown>[] = []
-  for (const row of rows) {
-    const n = row.notes
-    if (!n) continue
-    if (Array.isArray(n)) {
-      if (n[0]) out.push(n[0])
-    } else {
-      out.push(n)
+function mergeItems(items: NotificationListItem[]): NotificationListItem[] {
+  const byId = new Map<string, NotificationListItem>()
+  for (const item of items) {
+    const prev = byId.get(item.note.id)
+    if (!prev || item.activityAt > prev.activityAt) {
+      byId.set(item.note.id, item)
     }
   }
-  return out
+  return [...byId.values()].sort((a, b) => b.activityAt.localeCompare(a.activityAt))
+}
+
+function noteFromJoined(
+  notes: Record<string, unknown> | Record<string, unknown>[] | null | undefined,
+): Note | null {
+  if (!notes) return null
+  const row = Array.isArray(notes) ? notes[0] : notes
+  if (!row) return null
+  return normalizeNote(row)
 }
 
 /**
- * Notes the user didn't author, created after seenAt, matching enabled channels
- * (direct share / unmuted group share / public if enabled), plus the user's own
- * notes that received replies/reactions from others after seenAt.
+ * Collect notifiable note items. When `since` is set, only activity after that
+ * timestamp is included (badge / unread). When omitted, recent history is returned.
  */
-export async function fetchNewNotificationNotes(
+async function collectNotificationItems(
   userId: string,
   settings: NotificationSettings,
-): Promise<Note[]> {
-  const since = notificationSince(settings)
+  since: string | null,
+): Promise<NotificationListItem[]> {
   const mutedGroups = new Set(settings.mutedGroupIds)
   const mutedPeers = new Set(settings.mutedPeerIds)
   const mutedPublicAuthors = new Set(settings.mutedPublicAuthorIds)
-  const collected: Record<string, unknown>[] = []
-
+  const collected: NotificationListItem[] = []
   const tasks: Promise<void>[] = []
 
   if (settings.notifyPublic) {
     tasks.push(
       (async () => {
-        const { data, error } = await supabase
+        let q = supabase
           .from('notes')
           .select(NOTE_SELECT)
           .eq('visibility', 'public')
           .neq('author_id', userId)
-          .gt('created_at', since)
           .order('created_at', { ascending: false })
           .limit(MAX_NOTIFICATION_NOTES)
+        if (since) q = q.gt('created_at', since)
+        const { data, error } = await q
         if (error) throw error
         for (const row of (data ?? []) as Record<string, unknown>[]) {
           const authorId = row.author_id as string
           if (mutedPublicAuthors.has(authorId)) continue
-          collected.push(row)
+          const note = normalizeNote(row)
+          collected.push({ note, activityAt: note.created_at })
         }
       })(),
     )
@@ -254,36 +257,39 @@ export async function fetchNewNotificationNotes(
 
   tasks.push(
     (async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('notes')
         .select(
           `${NOTE_SELECT}, note_shares!inner(shared_with)` as typeof NOTE_SELECT,
         )
         .eq('note_shares.shared_with', userId)
         .neq('author_id', userId)
-        .gt('created_at', since)
         .order('created_at', { ascending: false })
         .limit(MAX_NOTIFICATION_NOTES)
+      if (since) q = q.gt('created_at', since)
+      const { data, error } = await q
       if (error) throw error
       for (const row of (data ?? []) as Record<string, unknown>[]) {
         const authorId = row.author_id as string
         if (mutedPeers.has(authorId)) continue
-        collected.push(row)
+        const note = normalizeNote(row)
+        collected.push({ note, activityAt: note.created_at })
       }
     })(),
   )
 
   tasks.push(
     (async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('notes')
         .select(
           `${NOTE_SELECT}, note_group_shares!inner(group_id)` as typeof NOTE_SELECT,
         )
         .neq('author_id', userId)
-        .gt('created_at', since)
         .order('created_at', { ascending: false })
         .limit(MAX_NOTIFICATION_NOTES)
+      if (since) q = q.gt('created_at', since)
+      const { data, error } = await q
       if (error) throw error
       for (const row of (data ?? []) as Array<
         Record<string, unknown> & {
@@ -294,57 +300,83 @@ export async function fetchNewNotificationNotes(
         const list = Array.isArray(shares) ? shares : shares ? [shares] : []
         const unmuted = list.some((s) => !mutedGroups.has(s.group_id))
         if (!unmuted) continue
-        collected.push(row)
+        const note = normalizeNote(row)
+        collected.push({ note, activityAt: note.created_at })
       }
     })(),
   )
 
-  // Owner engagement: replies/reactions on the user's notes (mutes do not apply).
-  const noteEmbed = `notes!inner(${NOTE_SELECT})`
+  const noteEmbed = `created_at, notes!inner(${NOTE_SELECT})`
   tasks.push(
     (async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('note_replies')
         .select(noteEmbed)
         .neq('author_id', userId)
-        .gt('created_at', since)
         .eq('notes.author_id', userId)
         .order('created_at', { ascending: false })
         .limit(MAX_NOTIFICATION_NOTES)
+      if (since) q = q.gt('created_at', since)
+      const { data, error } = await q
       if (error) throw error
-      collected.push(
-        ...extractJoinedNotes(
-          (data ?? []) as Array<{
-            notes?: Record<string, unknown> | Record<string, unknown>[] | null
-          }>,
-        ),
-      )
+      for (const row of (data ?? []) as Array<{
+        created_at: string
+        notes?: Record<string, unknown> | Record<string, unknown>[] | null
+      }>) {
+        const note = noteFromJoined(row.notes)
+        if (!note) continue
+        collected.push({ note, activityAt: row.created_at })
+      }
     })(),
   )
 
   tasks.push(
     (async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('note_reactions')
         .select(noteEmbed)
         .neq('user_id', userId)
-        .gt('created_at', since)
         .eq('notes.author_id', userId)
         .order('created_at', { ascending: false })
         .limit(MAX_NOTIFICATION_NOTES)
+      if (since) q = q.gt('created_at', since)
+      const { data, error } = await q
       if (error) throw error
-      collected.push(
-        ...extractJoinedNotes(
-          (data ?? []) as Array<{
-            notes?: Record<string, unknown> | Record<string, unknown>[] | null
-          }>,
-        ),
-      )
+      for (const row of (data ?? []) as Array<{
+        created_at: string
+        notes?: Record<string, unknown> | Record<string, unknown>[] | null
+      }>) {
+        const note = noteFromJoined(row.notes)
+        if (!note) continue
+        collected.push({ note, activityAt: row.created_at })
+      }
     })(),
   )
 
   await Promise.all(tasks)
-  return mergeNotes(collected).slice(0, MAX_NOTIFICATION_NOTES)
+  return mergeItems(collected).slice(0, MAX_NOTIFICATION_NOTES)
+}
+
+/**
+ * Unread notifiable notes (activity after seenAt) for badge and map filter.
+ */
+export async function fetchNewNotificationNotes(
+  userId: string,
+  settings: NotificationSettings,
+): Promise<Note[]> {
+  const since = notificationSince(settings)
+  const items = await collectNotificationItems(userId, settings, since)
+  return items.map((i) => i.note)
+}
+
+/**
+ * Chronological inbox history (up to 100), mute-aware, not gated by seenAt.
+ */
+export async function fetchNotificationHistory(
+  userId: string,
+  settings: NotificationSettings,
+): Promise<NotificationListItem[]> {
+  return collectNotificationItems(userId, settings, null)
 }
 
 export function publicNotesSummary(settings: NotificationSettings): 'On' | 'Off' | 'Custom' {

@@ -4,13 +4,21 @@ import { useAuth } from './lib/auth'
 import { deleteNote, fetchNotesForFilter, fetchNotesInBounds } from './lib/notesApi'
 import {
   fetchNewNotificationNotes,
+  fetchNotificationHistory,
   fetchNotificationSettings,
   markNotificationsSeen,
+  notificationSince,
 } from './lib/notificationsApi'
 import { flyTargetFromNotes } from './lib/mapFit'
 import { useGeolocation } from './lib/useGeolocation'
 import type { Session } from '@supabase/supabase-js'
-import type { GeocodeResult, MapBounds, MapNoteFilter, Note } from './lib/types'
+import type {
+  GeocodeResult,
+  MapBounds,
+  MapNoteFilter,
+  Note,
+  NotificationListItem,
+} from './lib/types'
 import MapView, { type FlyTarget } from './components/MapView'
 import SearchBar from './components/SearchBar'
 import AuthModal from './components/AuthModal'
@@ -35,7 +43,8 @@ export default function App() {
   const [showMyNotes, setShowMyNotes] = useState(false)
   const [showMyGroups, setShowMyGroups] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
-  const [notifSnapshot, setNotifSnapshot] = useState<Note[]>([])
+  const [notifSnapshot, setNotifSnapshot] = useState<NotificationListItem[]>([])
+  const [notifUnreadIds, setNotifUnreadIds] = useState<Set<string>>(() => new Set())
   const [notifCount, setNotifCount] = useState(0)
   const [picking, setPicking] = useState(false)
   const [flyTo, setFlyTo] = useState<FlyTarget | null>(null)
@@ -202,6 +211,7 @@ export default function App() {
     setSelected(null)
     setPicking(false)
     setShowNotifications(false)
+    // branch based on which panel the user requested
     if (panel === 'myNotes') {
       setShowMyGroups(false)
       setShowMyNotes(true)
@@ -221,13 +231,23 @@ export default function App() {
 
     try {
       const settings = await fetchNotificationSettings(session.user.id)
-      const list = await fetchNewNotificationNotes(session.user.id, settings)
-      setNotifSnapshot(list)
+      const since = notificationSince(settings)
+      const [history, unreadNotes] = await Promise.all([
+        fetchNotificationHistory(session.user.id, settings),
+        fetchNewNotificationNotes(session.user.id, settings),
+      ])
+      const unreadIds = new Set(unreadNotes.map((n) => n.id))
+      // Also mark history rows unread by activity vs snapshot since (covers engagement).
+      for (const item of history) {
+        if (item.activityAt > since) unreadIds.add(item.note.id)
+      }
+      setNotifSnapshot(history)
+      setNotifUnreadIds(unreadIds)
       setShowNotifications(true)
-      if (list.length > 0) {
+      if (unreadIds.size > 0) {
         handleMapFilterChange({
           type: 'notifications',
-          noteIds: list.map((n) => n.id),
+          noteIds: [...unreadIds],
           name: 'New notes',
         })
       }
@@ -320,6 +340,7 @@ export default function App() {
     setFlyTo({ lat: note.lat, lng: note.lng, zoom: 15 })
   }
 
+  // When the user clicks a notification, open the note and clear the notification badge.
   function handleSelectNotification(note: Note) {
     setShowNotifications(false)
     setSelected(note)
@@ -463,7 +484,8 @@ export default function App() {
 
         {showNotifications && !selected && !editor && !showMyNotes && !showMyGroups && (
           <NotificationsPanel
-            notes={notifSnapshot}
+            items={notifSnapshot}
+            unreadNoteIds={notifUnreadIds}
             onClose={() => {
               setShowNotifications(false)
               void refreshNotifBadge()

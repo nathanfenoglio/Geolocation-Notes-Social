@@ -283,12 +283,32 @@
   background: var(--border);
 }
 
+.notif-note-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  min-width: 0;
+}
+
 .notif-note-title {
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+}
+
+.notif-note-row.unread .notif-note-title {
+  font-weight: 700;
+}
+
+.notif-unread-dot {
+  flex-shrink: 0;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .notif-check-row {
